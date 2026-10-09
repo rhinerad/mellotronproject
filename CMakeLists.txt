@@ -9,6 +9,11 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+get_property(_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if(NOT _multi_config AND NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
 # Static MSVC runtime so the .vst3 doesn't need the VC++ redist
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
@@ -42,13 +47,18 @@ juce_add_plugin(TapeBank
     IS_MIDI_EFFECT              FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
     VST3_CATEGORIES             Instrument Sampler
-    COPY_PLUGIN_AFTER_BUILD     ${TAPEBANK_COPY_AFTER_BUILD})
+    COPY_PLUGIN_AFTER_BUILD     FALSE)   # enabled below, after the samples are bundled
 
 target_sources(TapeBank PRIVATE
-    Source/PluginProcessor.cpp   # Step 2, wired in Step 5
-    Source/PluginEditor.cpp      # Step 6
-    Source/SamplerEngine.cpp     # Step 3
-    Source/TapeProcessor.cpp)    # Step 4
+    Source/Parameters.h
+    Source/PluginProcessor.h
+    Source/PluginProcessor.cpp
+    Source/PluginEditor.h
+    Source/PluginEditor.cpp
+    Source/SamplerEngine.h
+    Source/SamplerEngine.cpp
+    Source/TapeProcessor.h
+    Source/TapeProcessor.cpp)
 
 target_include_directories(TapeBank PRIVATE Source)
 
@@ -83,4 +93,9 @@ if(EXISTS "${TAPEBANK_SAMPLES_DIR}")
     add_custom_command(TARGET TapeBank_Standalone POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${TAPEBANK_SAMPLES_DIR}" "${_standalone_samples}"
         COMMENT "Copying sample bank next to Standalone app")
+endif()
+
+# Added last so the copied plug-in already contains the sample bank
+if(TAPEBANK_COPY_AFTER_BUILD)
+    juce_enable_copy_plugin_step(TapeBank)
 endif()

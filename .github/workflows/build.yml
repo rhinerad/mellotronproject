@@ -1,0 +1,65 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Windows, os: windows-latest }
+          - { name: macOS,   os: macos-latest }
+          - { name: Linux,   os: ubuntu-24.04 }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libasound2-dev libjack-jackd2-dev libfreetype-dev \
+            libfontconfig1-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev \
+            libxinerama-dev libxrandr-dev libxrender-dev libgl1-mesa-dev
+
+      - name: Configure
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
+          else
+            cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+          fi
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 4
+
+      - name: Package
+        shell: bash
+        run: |
+          art=build/TapeBank_artefacts/Release
+          mkdir -p dist/TapeBank
+          cp -R "$art/VST3/TapeBank.vst3" dist/TapeBank/
+          cp -R "$art/Standalone" dist/TapeBank/Standalone
+          cp README.md dist/TapeBank/
+          cd dist
+          # Zip here so executable bits and bundle structure survive the artifact upload
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            ditto -c -k --keepParent TapeBank "TapeBank-${{ matrix.name }}.zip"
+          elif [ "$RUNNER_OS" = "Windows" ]; then
+            7z a -tzip "TapeBank-${{ matrix.name }}.zip" TapeBank > /dev/null
+          else
+            zip -qr "TapeBank-${{ matrix.name }}.zip" TapeBank
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TapeBank-${{ matrix.name }}
+          path: dist/TapeBank-${{ matrix.name }}.zip
+          if-no-files-found: error
